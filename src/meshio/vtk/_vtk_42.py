@@ -356,8 +356,10 @@ def _read_coords(f, data_type, is_ascii, num_points):
     else:
         # Binary data is big endian, see
         # <https://vtk.org/Wiki/VTK/Writing_VTK_files_using_python#.22legacy.22>.
-        dtype = dtype.newbyteorder(">")
-        coords = np.fromfile(f, count=num_points, dtype=dtype)
+        # Convert to native byte order right away.
+        coords = np.fromfile(f, count=num_points, dtype=dtype.newbyteorder(">")).astype(
+            dtype
+        )
         line = f.readline().decode()
         if line != "\n":
             raise ReadError()
@@ -371,8 +373,10 @@ def _read_points(f, data_type, is_ascii, num_points):
     else:
         # Binary data is big endian, see
         # <https://vtk.org/Wiki/VTK/Writing_VTK_files_using_python#.22legacy.22>.
-        dtype = dtype.newbyteorder(">")
-        points = np.fromfile(f, count=num_points * 3, dtype=dtype)
+        # Convert to native byte order right away.
+        points = np.fromfile(
+            f, count=num_points * 3, dtype=dtype.newbyteorder(">")
+        ).astype(dtype)
         line = f.readline().decode()
         if line != "\n":
             raise ReadError()
@@ -383,8 +387,8 @@ def _read_int_data(f, is_ascii, num_items, dtype=np.dtype("int32")):
     if is_ascii:
         c = np.fromfile(f, count=num_items, sep=" ", dtype=dtype)
     else:
-        dtype = dtype.newbyteorder(">")
-        c = np.fromfile(f, count=num_items, dtype=dtype)
+        # Binary data is big endian; convert to native byte order right away.
+        c = np.fromfile(f, count=num_items, dtype=dtype.newbyteorder(">")).astype(dtype)
         line = f.readline().decode()
         if line != "\n":
             raise ReadError()
@@ -395,8 +399,8 @@ def _read_cell_types(f, is_ascii, num_items):
     if is_ascii:
         ct = np.fromfile(f, count=int(num_items), sep=" ", dtype=int)
     else:
-        # binary
-        ct = np.fromfile(f, count=int(num_items), dtype=">i4")
+        # binary; big endian, convert to native byte order right away
+        ct = np.fromfile(f, count=int(num_items), dtype=">i4").astype(np.int32)
         line = f.readline().decode()
         # Sometimes, there's no newline at the end
         if line.strip() != "":
@@ -427,8 +431,10 @@ def _read_scalar_field(f, num_data, split, is_ascii):
     else:
         # Binary data is big endian, see
         # <https://vtk.org/Wiki/VTK/Writing_VTK_files_using_python#.22legacy.22>.
-        dtype = dtype.newbyteorder(">")
-        data = np.fromfile(f, count=num_data * num_comp, dtype=dtype)
+        # Convert to native byte order right away.
+        data = np.fromfile(
+            f, count=num_data * num_comp, dtype=dtype.newbyteorder(">")
+        ).astype(dtype)
         line = f.readline().decode()
         if line != "\n":
             raise ReadError()
@@ -451,8 +457,10 @@ def _read_field(f, num_data, split, shape, is_ascii):
     else:
         # Binary data is big endian, see
         # <https://vtk.org/Wiki/VTK/Writing_VTK_files_using_python#.22legacy.22>.
-        dtype = dtype.newbyteorder(">")
-        data = np.fromfile(f, count=k * num_data, dtype=dtype)
+        # Convert to native byte order right away.
+        data = np.fromfile(f, count=k * num_data, dtype=dtype.newbyteorder(">")).astype(
+            dtype
+        )
         line = f.readline().decode()
         if line != "\n":
             raise ReadError()
@@ -480,8 +488,10 @@ def _read_fields(f, num_fields, is_ascii):
         else:
             # Binary data is big endian, see
             # <https://vtk.org/Wiki/VTK/Writing_VTK_files_using_python#.22legacy.22>.
-            dtype = dtype.newbyteorder(">")
-            dat = np.fromfile(f, count=shape0 * shape1, dtype=dtype)
+            # Convert to native byte order right away.
+            dat = np.fromfile(
+                f, count=shape0 * shape1, dtype=dtype.newbyteorder(">")
+            ).astype(dtype)
             line = f.readline().decode()
             if line != "\n":
                 raise ReadError()
@@ -633,6 +643,13 @@ def write(filename, mesh, binary=True):
     if not binary:
         warn("VTK ASCII files are only meant for debugging.")
 
+    # Check up front if the mesh can be represented in this format at all.
+    for c in mesh.cells:
+        if c.type not in meshio_to_vtk_type:
+            raise WriteError(f"VTK cannot store cell type '{c.type}'.")
+    if points.dtype.name not in numpy_to_vtk_dtype:
+        raise WriteError(f"VTK cannot store point dtype '{points.dtype}'.")
+
     with open_file(filename, "wb") as f:
         f.write(b"# vtk DataFile Version 4.2\n")
         f.write(f"written by meshio v{__version__}\n".encode())
@@ -744,6 +761,11 @@ def _write_field_data(f, data, binary):
 
         if " " in name:
             raise WriteError(f"VTK doesn't support spaces in field names ('{name}').")
+
+        if values.dtype.name not in numpy_to_vtk_dtype:
+            raise WriteError(
+                f"VTK cannot store field '{name}' with dtype '{values.dtype}'."
+            )
 
         f.write(
             (

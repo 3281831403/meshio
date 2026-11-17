@@ -72,6 +72,11 @@ def read_buffer(f, is_ascii, data_size):
     if has_additional_tag_data:
         warn("The file contains tag data that couldn't be processed.")
 
+    # Wrap the cells in CellBlocks. Besides being the canonical representation,
+    # this makes sure that `cell_data_from_raw` splits the raw data at the
+    # correct block boundaries (`len()` of a (type, data) tuple is always 2).
+    cells = [CellBlock(cell_type, data) for cell_type, data in cells]
+
     cell_data = cell_data_from_raw(cells, cell_data_raw)
 
     # merge cell_tags into cell_data
@@ -79,11 +84,11 @@ def read_buffer(f, is_ascii, data_size):
         if tag_name not in cell_data:
             cell_data[tag_name] = []
         offset = {}
-        for cell_type, cell_array in cells:
-            start = offset.setdefault(cell_type, 0)
-            end = start + len(cell_array)
-            offset[cell_type] = end
-            tags = tag_dict.get(cell_type, [])
+        for cell_block in cells:
+            start = offset.setdefault(cell_block.type, 0)
+            end = start + len(cell_block)
+            offset[cell_block.type] = end
+            tags = tag_dict.get(cell_block.type, [])
             tags = np.array(tags[start:end], dtype=c_int)
             cell_data[tag_name].append(tags)
 

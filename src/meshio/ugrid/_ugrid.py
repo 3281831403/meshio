@@ -134,7 +134,7 @@ def read_buffer(f, file_type):
         cells.append(CellBlock(key, out - 1))
 
         # fill volume element attributes with zero
-        cell_data["ugrid:ref"].append(np.zeros(nitems, dtype=int))
+        cell_data["ugrid:ref"].append(np.zeros(nitems, dtype=itype))
 
     if file_type["type"] == "F":
         _read_section(f, file_type, count=1, dtype=itype)

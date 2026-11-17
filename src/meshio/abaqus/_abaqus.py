@@ -9,7 +9,7 @@ import numpy as np
 
 from ..__about__ import __version__
 from .._common import num_nodes_per_cell
-from .._exceptions import ReadError
+from .._exceptions import ReadError, WriteError
 from .._files import open_file
 from .._helpers import register_format
 from .._mesh import CellBlock, Mesh
@@ -402,6 +402,17 @@ def _read_set(f, params_map):
 def write(
     filename, mesh: Mesh, float_fmt: str = ".16e", translate_cell_names: bool = True
 ) -> None:
+    # The Abaqus format cannot store point, cell, or field data. Refuse to
+    # write instead of silently dropping them.
+    for label, data in [
+        ("point_data", mesh.point_data),
+        ("cell_data", mesh.cell_data),
+        ("field_data", mesh.field_data),
+    ]:
+        if data:
+            names = ", ".join(f"'{key}'" for key in data.keys())
+            raise WriteError(f"Abaqus cannot store {label} ({names}).")
+
     with open_file(filename, "wt") as f:
         f.write("*HEADING\n")
         f.write("Abaqus DataFile Version 6.14\n")

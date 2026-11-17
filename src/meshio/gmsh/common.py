@@ -233,6 +233,14 @@ def _write_physical_names(fh, field_data):
 
 
 def _write_data(fh, tag, name, data, binary):
+    # Gmsh stores all NodeData/ElementData values as doubles; anything else
+    # (notably integer ids) would silently come back as float on read.
+    if data.dtype.kind != "f":
+        raise WriteError(
+            f"Gmsh cannot represent field '{name}' with dtype '{data.dtype}'; "
+            "only floating-point data can be stored."
+        )
+
     fh.write(f"${tag}\n".encode())
     # <http://gmsh.info/doc/texinfo/gmsh.html>:
     # > Number of string tags.

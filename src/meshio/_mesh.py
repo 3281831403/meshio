@@ -176,6 +176,8 @@ class Mesh:
                     f"{len(cells)} cell blocks, but '{key}' has {len(data)} blocks."
                 )
 
+            ref_dtype = None
+            ref_shape = None
             for k in range(len(data)):
                 data[k] = np.asarray(data[k])
                 if len(data[k]) != len(self.cells[k]):
@@ -185,6 +187,32 @@ class Mesh:
                         + f"has length {len(self.cells[k])}, but "
                         + f"corresponding cell data item has length {len(data[k])}."
                     )
+
+                # All blocks of a cell data field must agree in dtype and
+                # (trailing) shape; catch inconsistencies here rather than
+                # deep inside a writer.
+                # Compare dtypes byteorder-agnostically: a big-endian and a
+                # little-endian int32 array hold the same logical data.
+                dtype = data[k].dtype.newbyteorder("=")
+                shape = data[k].shape[1:]
+                if ref_dtype is None:
+                    ref_dtype = dtype
+                    ref_shape = shape
+                else:
+                    if dtype != ref_dtype:
+                        raise ValueError(
+                            f"Incompatible cell data '{key}'. "
+                            f"Cell block 0 ('{self.cells[0].type}') has dtype "
+                            f"{ref_dtype}, but cell block {k} "
+                            f"('{self.cells[k].type}') has dtype {dtype}."
+                        )
+                    if shape != ref_shape:
+                        raise ValueError(
+                            f"Incompatible cell data '{key}'. "
+                            f"Cell block 0 ('{self.cells[0].type}') has item shape "
+                            f"{ref_shape}, but cell block {k} "
+                            f"('{self.cells[k].type}') has item shape {shape}."
+                        )
 
     def __repr__(self):
         lines = ["<meshio mesh object>", f"  Number of points: {len(self.points)}"]
